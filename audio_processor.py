@@ -6,12 +6,7 @@ from moviepy.editor import VideoFileClip
 # -------------------------------------------------------------------
 # Compatibility patch for Python 3.13 (audioop removed from stdlib)
 # -------------------------------------------------------------------
-try:
-    import pyaudioop
-    sys.modules["audioop"] = pyaudioop
-except ImportError:
-    # Safe fallback for Python 3.11 or older (which already has audioop)
-    pass
+
 
 from pydub import AudioSegment
 
