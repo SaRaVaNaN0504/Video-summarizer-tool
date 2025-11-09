@@ -1,0 +1,7 @@
+flask==2.3.3
+speechrecognition==3.10.0
+pydub==0.25.1
+moviepy==1.0.3
+googletrans==4.0.0-rc1
+sumy==0.11.0
+gunicorn==21.2.0

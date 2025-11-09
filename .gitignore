@@ -1,0 +1,32 @@
+# Create .gitignore file
+echo "# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+.idea/
+.DS_Store
+
+# Temporary files
+uploads/
+temp/
+*.tmp
+
+# Logs
+*.log
+
+# VS Code
+.vscode/
+
+# Environment variables
+.env
+.env.local
+
+# Large files
+*.mp4
+*.wav
+*.mp3" > .gitignore

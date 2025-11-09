@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Summarizer - SLP Project</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎬 Video Transcription & Summary Generator</h1>
+            <p>Upload a video and get transcription/summary in multiple Indian languages</p>
+        </header>
+
+        <div class="upload-section">
+            <div class="file-upload-box" id="uploadBox">
+                <input type="file" id="videoFile" accept=".mp4" hidden>
+                <div class="upload-content">
+                    <i class="upload-icon">📁</i>
+                    <h3>Click to upload MP4 video</h3>
+                    <p>Max: 5 minutes duration, 200MB size</p>
+                    <button type="button" onclick="document.getElementById('videoFile').click()">
+                        Choose Video File
+                    </button>
+                </div>
+            </div>
+            
+            <div class="file-info" id="fileInfo" style="display: none;">
+                <h4>Selected File:</h4>
+                <p id="fileName"></p>
+                <p id="fileSize"></p>
+            </div>
+        </div>
+
+        <div class="language-section">
+            <label for="language">Select Output Language:</label>
+            <select id="language">
+                {% for code, name in languages.items() %}
+                <option value="{{ code }}">{{ name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="action-buttons">
+            <button id="transcribeBtn" onclick="processVideo('transcribe')" disabled>
+                🎤 Get Transcription
+            </button>
+            <button id="summarizeBtn" onclick="processVideo('summarize')" disabled>
+                📝 Get Summary
+            </button>
+        </div>
+
+        <div class="results-section" id="resultsSection" style="display: none;">
+            <h3>Results:</h3>
+            <div class="result-content" id="resultContent"></div>
+            <button onclick="downloadResult()" id="downloadBtn" style="display: none;">
+                📥 Download Result
+            </button>
+        </div>
+
+        <div class="loading" id="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Processing your video... This may take a few minutes.</p>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
