@@ -1,6 +1,7 @@
 import os
 import tempfile
 from moviepy.editor import VideoFileClip
+sys.modules["audioop"] = pyaudioop
 from pydub import AudioSegment
 
 def extract_audio_from_video(video_path):
