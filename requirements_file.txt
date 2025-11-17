@@ -1,0 +1,1686 @@
+# LAB-1 : TEXT-CLASSIFICATION
+import pandas as pd
+import nltk
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+from nltk.tokenize import word_tokenize
+import string
+import matplotlib.pyplot as plt
+
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
+
+
+import seaborn as sns
+nltk.download('punkt_tab')
+nltk.download('stopwords')
+nltk.download('wordnet')
+nltk.download('omw-1.4')
+
+dataset = pd.read_csv('ecommerceDataset.csv',header=None)
+dataset.iloc[:, 0].unique()
+array(['Household', 'Books', 'Clothing & Accessories', 'Electronics'],
+      dtype=object)
+#dataset.count
+dataset.columns
+df = pd.DataFrame()
+df['Category'] = dataset[0]
+df['Description'] = dataset[1]
+print(df.head())
+
+df = df.dropna()
+def preprocess_text(text: str) -> str:
+
+    # remove punctuations
+    text = text.translate(str.maketrans("", "", string.punctuation))
+
+    # convert to lowercase
+    text = text.lower()
+
+    # tokenize
+    words = word_tokenize(text)
+
+    # remove stop words
+    stop_words =  set(stopwords.words("english"))
+    words = [word for word in words if word not in stop_words]
+
+    # lemmatization
+    lemmatizer = WordNetLemmatizer()
+    words = [lemmatizer.lemmatize(word) for word in words]
+
+    return " ".join(words)
+df['Description_processed'] = df['Description'].astype(str).apply(preprocess_text)
+df['Description_processed'].head(5)
+
+category_counts = dataset[0].value_counts()
+
+category_counts.plot(kind='bar')
+plt.xlabel('Category')
+plt.ylabel('Count')
+plt.title('Category Distribution')
+plt.show()
+
+df = df.dropna()
+vectorizer = TfidfVectorizer()
+X = vectorizer.fit_transform(df["Description_processed"])
+y = df['Category'].map({
+    'Household': 0,
+    'Books': 1, 
+    'Electronics': 2,
+    'Clothing & Accessories': 3
+})
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+model = RandomForestClassifier()
+model.fit(X_train, y_train)
+
+y_pred = model.predict(X_test)
+print(classification_report(y_pred, y_test))
+
+cm = confusion_matrix(y_test, y_pred)
+
+plt.figure(figsize=(10,8))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+            xticklabels=['Household', 'Books', 'Electronics', 'Clothing & Accessories'],
+            yticklabels=['Household', 'Books', 'Electronics', 'Clothing & Accessories'])
+
+plt.xlabel('Predicted')
+plt.ylabel('Actual')
+plt.title('Confusion Matrix')
+plt.show()
+
+# LAB-2 STEMMING
+
+vowels = "aeiou"
+
+def is_consonant(word, i):
+    if word[i] in vowels:
+        return False
+    if word[i] == 'y':
+        return i == 0 or not is_consonant(word, i - 1)
+    return True
+
+def contains_vowel(word):
+    return any(not is_consonant(word, i) for i in range(len(word)))
+
+def step1a(word):
+    if word.endswith('sses'):
+        return word[:-4] + 'ss'
+    elif word.endswith('ies'):
+        return word[:-3] + 'i'
+    elif word.endswith('ss'):
+        return word
+    elif word.endswith('s'):
+        return word[:-1]
+    return word
+
+def step1b(word):
+    if word.endswith('eed'):
+        return word[:-3] + 'ee'
+    elif word.endswith('ed') and contains_vowel(word[:-2]):
+        return word[:-2]
+    elif word.endswith('ing') and contains_vowel(word[:-3]):
+        return word[:-3]
+    return word
+
+def step1c(word):
+    if word.endswith('y') and contains_vowel(word[:-1]):
+        return word[:-1] + 'i'
+    return word
+
+def stem(word):
+    word = step1a(word)
+    word = step1b(word)
+    word = step1c(word)
+    return word
+words = ["studies", "universes", "categories", "ponies", "analyses",
+         "running", "happiness", "flies", "playing", "flying", "international"]
+stemmed_words = []
+
+for i in words :
+    stemmed_words.append(porter_stemmer(i))
+for i in range(len(words)):
+    print(words[i], "->", stemmed_words[i])
+
+
+# LAB-3 CORPUS ANALYSIS
+## 1. Type token analysis - Tamil Language Corpus
+import matplotlib.pyplot as plt
+from collections import Counter
+import nltk
+from nltk.tokenize import word_tokenize
+import pandas as pd
+import re
+nltk.download('punkt_tab')
+
+dt = pd.read_csv('tamilmurasucorpus.csv')
+dt.columns
+articles = pd.DataFrame()
+
+articles['news_article'] = dt['news_article']
+articles.count()
+articles.head(5)
+
+all_articles = ' '.join(articles['news_article'].dropna())
+word_tokens = word_tokenize(all_articles)
+word_types = set(word_tokens)
+word_ttr = len(word_types) / len(word_tokens) if len(word_tokens) > 0 else 0
+print(f"Word-level Type-Token Ratio: {word_ttr:.4f}")
+tamil_vowels = 'அஆஇஈஉஊஎஏஐஒஓஔ'
+tamil_consonants = 'கஙசஞடணதந்பமயரலவழளறன'
+tamil_dependent_vowels = 'ாிீுூெேைொோௌ'
+def get_tamil_syllables(word):
+    syllables = []
+    current_syllable = ""
+    i = 0
+    while i < len(word):
+        current_syllable += word[i]
+   
+        if word[i] in tamil_vowels:
+            syllables.append(current_syllable)
+            current_syllable = ""
+        elif word[i] in tamil_consonants:
+            if i + 1 < len(word):
+                if word[i+1] == '்': 
+                    current_syllable += word[i+1]
+                    syllables.append(current_syllable)
+                    current_syllable = ""
+                    i += 1
+                elif word[i+1] in tamil_dependent_vowels:
+                    current_syllable += word[i+1]
+                    syllables.append(current_syllable)
+                    current_syllable = ""
+                    i += 1
+      
+            else: 
+                 syllables.append(current_syllable)
+                 current_syllable = ""
+        else: 
+             syllables.append(current_syllable)
+             current_syllable = ""
+        i += 1
+    if current_syllable:
+        syllables.append(current_syllable)
+    return syllables
+syllable_tokens = []
+for word in word_tokens:
+    syllable_tokens.extend(get_tamil_syllables(word))
+syllable_types = set(syllable_tokens)
+syllable_ttr = len(syllable_types) / len(syllable_tokens) if len(syllable_tokens) > 0 else 0
+print(f"Syllable-level Type-Token Ratio: {syllable_ttr:.4f}")
+
+# POS tagging
+
+from nltk import pos_tag
+from nltk.chunk import RegexpParser
+nltk.download('punkt')
+nltk.download('averaged_perceptron_tagger')
+nltk.download('averaged_perceptron_tagger_eng')
+sentences = [
+    "The quick brown fox jumps over the lazy dog near the river bank in the early morning.",
+    "She carefully opened the old, dusty book that had been lying untouched for decades.",
+    "Despite the heavy rain, the children played joyfully in the muddy puddles outside.",
+    "The professor, who had a reputation for being strict, praised the student’s insightful answer.",
+    "After finishing her homework, Maria decided to go for a long walk in the park.",
+    "The large crowd gathered around the stage, eagerly waiting for the concert to begin.",
+    "He bought fresh vegetables and fruits from the market to prepare a healthy dinner.",
+    "The small kitten, scared by the loud noise, hid under the couch for hours.",
+    "During the meeting, they discussed plans to improve the company’s overall productivity.",
+    "The athlete trained hard every day to qualify for the upcoming international competition."
+]
+manual_pos_tags_1 = [
+    ('The', 'DT'), ('quick', 'JJ'), ('brown', 'JJ'), ('fox', 'NN'), ('jumps', 'VBZ'),
+    ('over', 'IN'), ('the', 'DT'), ('lazy', 'JJ'), ('dog', 'NN'), ('near', 'IN'),
+    ('the', 'DT'), ('river', 'NN'), ('bank', 'NN'), ('in', 'IN'), ('the', 'DT'),
+    ('early', 'JJ'), ('morning', 'NN')
+]
+manual_chunks_1 = [
+    ('The quick brown fox', 'NP'),
+    ('the lazy dog', 'NP'),
+    ('the river bank', 'NP'),
+    ('the early morning', 'NP')
+]
+print("Sentence 1:")
+print(sentences[0])
+print("\nManual POS tags:")
+print(manual_pos_tags_1)
+
+
+print("\nNLTK POS tagging:")
+tokens = word_tokenize(sentences[0])
+nltk_tags = pos_tag(tokens)
+print(nltk_tags)
+grammar = r"""
+  NP: {<DT>?<JJ>*<NN.*>}   
+  VP: {<VB.*><RB>?}       
+"""
+cp = RegexpParser(grammar)
+tree = cp.parse(nltk_tags)
+print("\nNLTK Shallow Parse Tree:")
+print(tree)
+
+print("\nComparison of Manual and NLTK POS Tags:")
+print(f"{'Word':15}{'Manual POS':12}{'NLTK POS'}")
+print("-"*35)
+for (m_word, m_tag), (n_word, n_tag) in zip(manual_pos_tags_1, nltk_tags):
+    print(f"{m_word:15}{m_tag:12}{n_tag}")
+
+
+# LAB 4 NGRAM TEXT CLASSIFICATION
+
+import nltk
+nltk.download('movie_reviews')
+
+from nltk.corpus import movie_reviews
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import accuracy_score, classification_report
+import seaborn as sns
+import matplotlib.pyplot as plt
+docs = []
+labels = []
+for cat in movie_reviews.categories():
+    for fid in movie_reviews.fileids(cat):
+        docs.append(movie_reviews.raw(fid))
+        labels.append(cat)
+df = pd.DataFrame({'text': docs, 'label': labels})
+print(df.shape) 
+(2000, 2)
+X_train, X_test, y_train, y_test = train_test_split(df['text'], df['label'], test_size=0.20, random_state=42, stratify=df['label'])
+## BAG OF WORDS
+bow_clf = Pipeline([
+        ('vec', CountVectorizer(ngram_range=(1,1), stop_words='english', max_features=40_000)),
+        ('clf', LogisticRegression(max_iter=1000, C=2.0))
+])
+bow_clf.fit(X_train, y_train)
+
+
+y_pred_bow = bow_clf.predict(X_test)
+acc_bow = accuracy_score(y_test, y_pred_bow)
+print("BoW accuracy:", acc_bow)
+
+## N GRAM
+ngram_clf = Pipeline([
+        ('vec', TfidfVectorizer(ngram_range=(1,3), stop_words='english', max_features=40_000)),
+        ('clf', LogisticRegression(max_iter=1000, C=2.0))
+])
+ngram_clf.fit(X_train, y_train)
+
+y_pred_ngram = ngram_clf.predict(X_test)
+acc_ngram = accuracy_score(y_test, y_pred_ngram)
+print("N-gram accuracy:", acc_ngram)
+print("BoW accuracy: {:.3f}".format(acc_bow))
+print("N-gram accuracy: {:.3f}".format(acc_ngram))
+print("\nClassification report (BoW):\n", classification_report(y_test, y_pred_bow))
+print("\nClassification report (N-gram):\n", classification_report(y_test, y_pred_ngram))
+
+fig, ax = plt.subplots(1, 2, figsize=(12,4))
+labels = ['neg', 'pos']
+
+sns.heatmap(cm_bow, annot=True, fmt='d', cmap='Blues',
+            xticklabels=labels, yticklabels=labels, ax=ax[0])
+ax[0].set_title('BoW')
+ax[0].set_xlabel('Predicted'); ax[0].set_ylabel('True')
+
+sns.heatmap(cm_ngram, annot=True, fmt='d', cmap='Greens',
+            xticklabels=labels, yticklabels=labels, ax=ax[1])
+ax[1].set_title('N-gram')
+ax[1].set_xlabel('Predicted'); ax[1].set_ylabel('True')
+
+plt.tight_layout()
+plt.show()
+
+# LAB 5 NAIVE BAYES CLASSIFIER
+
+import pandas as pd
+import numpy as np
+import re
+from collections import Counter
+data = {
+    'text': [
+        # Spam messages 
+        'Free money now',  # spam
+        'Buy one get one free',  # spam
+        'Get cheap loans today',  # spam
+        'Congratulations, you won a prize',  # spam
+        'Limited time offer for cheap flights',  # spam
+        'You have a chance to win $1000! Click here to claim',  # spam
+        'Earn money from home, no experience required',  # spam
+        'Exclusive offer: Get a free iPhone now!',  # spam
+        'Hurry! Final days of our big sale',  # spam
+        'Claim your free vacation package now',  # spam
+        'Get rich quick with this simple trick',  # spam
+        'Low interest loans available today',  # spam
+        'You have a new credit card offer waiting',  # spam
+        'Act now! Special offer for new customers',  # spam
+        'Join our millionaire program for free',  # spam
+        'Free trial for premium online dating',  # spam
+        'Congratulations, you’ve been selected for a free gift!',  # spam
+        'Limited time: Buy now and get 90% off!',  # spam
+        'Your bank account has been compromised! Click here to verify',  # spam
+        'Unlock exclusive access to top-tier jobs today',  # spam
+        'Click here to receive your free coupon for discounts',  # spam
+        'Get your free credit report today',  # spam
+        'We found your perfect match on our dating site!',  # spam
+        'Get access to the best online courses for free',  # spam
+        'You’re pre-approved for a high-limit credit card!',  # spam
+        'Free e-book download: How to make $1000 a day',  # spam
+        'Buy now, pay later – easy installment plans',  # spam
+        'Make money in your sleep with this proven system',  # spam
+        'Get a $500 gift card just for signing up!',  # spam
+        'Hurry, last chance to sign up for this exclusive offer!',  # spam
+        'Final offer: Free iPad if you act now!',  # spam
+        'Huge savings! Shop now for a limited-time deal',  # spam
+        'Win a free laptop today by clicking here!',  # spam
+        'No experience required! Start your own online business now',  # spam
+        'Get your free trial of Netflix now',  # spam
+        'Biggest sale of the year – up to 75% off!',  # spam
+        'Want to make easy money? Start today with this program!',  # spam
+        'Last chance! Free tickets to a major concert event!',  # spam
+        'Special offer: Free consultation with our experts',  # spam
+        'Get your free fortune reading today!',  # spam
+        'Unlock huge savings on luxury watches',  # spam
+        'Your account has been suspended, click here to reactivate',  # spam
+        'Exclusive invitation: Join now and receive free gifts',  # spam
+        'Want a free vacation? Click here for details',  # spam
+        'Save up to 90% on the most popular software',  # spam
+        
+        # Ham messages 
+        'Hi, how are you?',  # ham
+        'Hello, want to catch up later?',  # ham
+        'I miss you, call me!',  # ham
+        'Are you free this weekend?',  # ham
+        'See you at the meeting',  # ham
+        'Let’s grab lunch tomorrow',  # ham
+        'What time do we meet for the event?',  # ham
+        'I just finished my project, want to hear about it?',  # ham
+        'Hope you are doing well!',  # ham
+        'Had a great time at the concert last night',  # ham
+        'Are you still going to the gym later?',  # ham
+        'Do you want to watch a movie tonight?',  # ham
+        'Let me know if you need help with that task',  # ham
+        'I’ll be back in town on Monday, let’s catch up',  # ham
+        'Do you have any recommendations for a good restaurant?',  # ham
+        'Can we meet up for coffee tomorrow?',  # ham
+        'How’s the family doing?',  # ham
+        'Do you need a ride to the airport tomorrow?',  # ham
+        'Let’s plan a trip next month',  # ham
+        'I’ll send you the files shortly',  # ham
+        'Can we reschedule our meeting?',  # ham
+        'Looking forward to seeing you at the party',  # ham
+        'I’m really excited for the weekend trip',  # ham
+        'I need to finish a few tasks, but then I’ll call you',  # ham
+        'We should do something fun this Saturday',  # ham
+        'Thanks for helping me with the project!',  # ham
+        'I saw that movie you recommended – it was great!',  # ham
+        'Let me know when you are free to chat',  # ham
+        'Did you hear about the new restaurant in town?',  # ham
+        'I’m going to try out that new workout class tomorrow',  # ham
+        'Do you have any plans for the holidays?',  # ham
+        'I’ll pick up some groceries on my way home',  # ham
+        'Let’s get together for coffee this afternoon',  # ham
+        'Are we still meeting for dinner tonight?',  # ham
+        'I need to check my schedule for next week',  # ham
+        'How’s the new job going?',  # ham
+        'Let me know if you need any help with the presentation',  # ham
+        'I’m heading to the park if you want to join',  # ham
+        'How did your meeting go? I hope it went well',  # ham
+        'I got your message – I’ll get back to you shortly',  # ham
+        'Let’s catch up over the weekend',  # ham
+        'I’ll bring the book I promised you tomorrow',  # ham
+        'Do you want to meet up for a walk later?',  # ham
+        'Can you help me with something later today?',  # ham
+        'Let’s chat later, I’m a bit busy at the moment',  # ham
+        'I need to get a few things done before the weekend',  # ham
+        'I’ll call you when I get home',  # ham
+        'Looking forward to our catch-up session tomorrow',  # ham
+        'Do you need help with your project?',  # ham
+        'How’s your day going so far?' # ham
+    ],
+    'label': [
+        # Spam labels
+        'spam', 'spam', 'spam', 'spam', 'spam', 'spam', 'spam', 'spam', 'spam', 'spam', 
+        'spam', 'spam', 'spam', 'spam', 'spam', 'spam', 'spam', 'spam', 'spam', 'spam', 
+        'spam', 'spam', 'spam', 'spam', 'spam', 'spam', 'spam', 'spam', 'spam', 'spam',
+        'spam', 'spam', 'spam', 'spam', 'spam', 'spam', 'spam', 'spam', 'spam', 'spam',
+        'spam', 'spam', 'spam', 'spam', 'spam',
+        
+        # Ham labels
+         'ham', 'ham', 'ham', 'ham', 'ham', 'ham', 'ham', 'ham', 'ham', 
+        'ham', 'ham', 'ham', 'ham', 'ham', 'ham', 'ham', 'ham', 'ham', 'ham', 
+        'ham', 'ham', 'ham', 'ham', 'ham', 'ham', 'ham', 'ham', 'ham', 'ham',
+        'ham', 'ham', 'ham', 'ham', 'ham', 'ham', 'ham', 'ham', 'ham', 'ham',
+        'ham', 'ham', 'ham', 'ham', 'ham', 'ham', 'ham', 'ham', 'ham', 'ham', 'ham'
+    ]
+}
+df = pd.DataFrame(data)
+df.shape
+df.head(5)
+def preprocess_text(text):
+    text = text.lower() 
+    text = re.sub(r'<.*?>|[^a-zA-Z\s]', '', text)  
+    text = re.sub(r'\s+', ' ', text) 
+    return text
+df['cleaned_text'] = df['text'].apply(preprocess_text)
+df.head(5)
+
+def create_vocabulary(texts):
+    vocabulary = set()
+    for text in texts:
+        for word in text.split():
+            vocabulary.add(word)
+    return sorted(list(vocabulary))
+vocabulary = create_vocabulary(df['cleaned_text'])
+def text_to_bow(text, vocabulary):
+    word_counts = {word: 0 for word in vocabulary}
+    for word in text.split():
+        if word in word_counts:
+            word_counts[word] += 1
+    return np.array(list(word_counts.values()))
+bow_vectors = np.array([text_to_bow(text, vocabulary) for text in df['cleaned_text']])
+X = pd.DataFrame(bow_vectors, columns=vocabulary)
+y = df['label']
+class NaiveBayesClassifier:
+    def __init__(self, alpha=1):
+        self.alpha = alpha
+        self.prior_probabilities = {}
+        self.likelihoods = {}
+        self.classes = []
+        self.vocabulary = []
+
+    def fit(self, X_train, y_train, vocabulary):
+        self.classes = np.unique(y_train)
+        self.vocabulary = vocabulary
+
+
+        for c in self.classes:
+            self.prior_probabilities[c] = np.sum(y_train == c) / len(y_train)
+
+        for c in self.classes:
+            class_docs = X_train[y_train == c]
+            word_counts_in_class = np.sum(class_docs, axis=0) + self.alpha
+            total_words_in_class = np.sum(word_counts_in_class)
+            self.likelihoods[c] = word_counts_in_class / total_words_in_class
+
+    def predict(self, X_test):
+        predictions = []
+        for _, row in X_test.iterrows():
+            posterior_probabilities = {}
+            for c in self.classes:
+                prior = self.prior_probabilities[c]
+                likelihood_product = 1
+                for i, word_count in enumerate(row):
+                    word_likelihood = self.likelihoods[c][i]
+                    likelihood_product *= (word_likelihood ** word_count)
+
+                posterior_probabilities[c] = np.log(prior) + np.sum(row * np.log(self.likelihoods[c])) 
+            
+            predicted_class = max(posterior_probabilities, key=posterior_probabilities.get)
+            predictions.append(predicted_class)
+        return predictions
+train_size = int(0.7 * len(df))
+X_train, X_test = X[:train_size], X[train_size:]
+y_train, y_test = y[:train_size], y[train_size:]
+classifier = NaiveBayesClassifier(alpha=1)
+classifier.fit(X_train, y_train, vocabulary)
+predictions = classifier.predict(X_test)
+accuracy = np.sum(predictions == y_test) / len(y_test)
+print(f"Accuracy: {accuracy:.2f}")
+
+
+# LAB 6 POS TAGGING USING VITERBI ALGORITHM
+
+import numpy as np
+import pandas as pd
+train_data = [
+    [("the","DET"),("dog","NOUN"),("barks","VERB")],
+    [("a","DET"),("cat","NOUN"),("sleeps","VERB")],
+    [("the","DET"),("quick","ADJ"),("fox","NOUN"),("jumps","VERB")],
+    [("she","PRON"),("enjoys","VERB"),("music","NOUN")],
+    [("he","PRON"),("runs","VERB"),("fast","ADV")],
+    [("dogs","NOUN"),("chase","VERB"),("cats","NOUN")],
+    [("the","DET"),("dog","NOUN"),("eats","VERB"),("a","DET"),("bone","NOUN")],
+    [("a","DET"),("man","NOUN"),("sees","VERB"),("the","DET"),("dog","NOUN")],
+    [("they","PRON"),("watch","VERB"),("a","DET"),("movie","NOUN")],
+    [("the","DET"),("cat","NOUN"),("sits","VERB"),("on","ADP"),("the","DET"),("mat","NOUN")]
+]
+tags = sorted(set(t for sent in train_data for _,t in sent))
+words = sorted(set(w.lower() for sent in train_data for w,_ in sent))
+print(tags)
+print(words[:6])
+
+tag2idx = {t:i for i,t in enumerate(tags)}
+idx2tag = {i:t for t,i in tag2idx.items()}
+word2idx = {w:i for i,w in enumerate(words)}
+idx2word = {i:w for w,i in word2idx.items()}
+T = len(tags)
+V = len(words)
+alpha = 1.0
+pi_counts = np.zeros(T)
+A_counts = np.zeros((T,T))
+B_counts = np.zeros((T,V))
+for sent in train_data:
+    if not sent: continue
+
+    pi_counts[tag2idx[sent[0][1]]] += 1
+    for i,(w,t) in enumerate(sent):
+        t_idx = tag2idx[t]
+        w_idx = word2idx[w.lower()]
+        B_counts[t_idx,w_idx] += 1
+        if i < len(sent)-1:
+            t_next = tag2idx[sent[i+1][1]]
+            A_counts[t_idx,t_next] += 1
+pi = (pi_counts+alpha) / (pi_counts.sum()+alpha*T)
+A  = (A_counts+alpha) / (A_counts.sum(axis=1,keepdims=True)+alpha*T)
+B  = (B_counts+alpha) / (B_counts.sum(axis=1,keepdims=True)+alpha*(V+1))
+def viterbi(tokens):
+    n = len(tokens)
+    logA = np.log(A+1e-300)
+    logpi = np.log(pi+1e-300)
+
+    def log_emission(tag_idx, word):
+        w = word.lower()
+        if w in word2idx:
+            return np.log(B[tag_idx,word2idx[w]]+1e-300)
+        else:
+            denom = B[tag_idx,:].sum()
+            unk_prob = alpha / ( (B_counts[tag_idx,:].sum()) + alpha*(V+1) )
+            return np.log(unk_prob+1e-300)
+
+    v = np.full((n,T), -np.inf)
+    bp = np.zeros((n,T), dtype=int)
+
+    for t in range(T):
+        v[0,t] = logpi[t] + log_emission(t,tokens[0])
+
+    for i in range(1,n):
+        for t in range(T):
+            emis = log_emission(t,tokens[i])
+            scores = v[i-1,:] + logA[:,t] + emis
+            bp[i,t] = np.argmax(scores)
+            v[i,t] = np.max(scores)
+
+    seq = []
+    last = np.argmax(v[n-1,:])
+    seq.append(last)
+
+    for i in range(n-1,0,-1):
+        last = bp[i,last]
+        seq.append(last)
+    seq.reverse()
+
+    return [(tokens[i], idx2tag[seq[i]]) for i in range(n)]
+tests = [
+    "the dog runs fast",
+    "a quick dog sees the cat",
+    "they eat on the street",
+]
+for s in tests:
+    toks = s.split()
+    tagged = viterbi(toks)
+    print(s)
+    print(" ".join(f"{t}" for w,t in tagged))
+    print()
+
+# LAB 7 TEXT CLASSIFICATION WITH CNN, BoW AND N-GRAM
+
+import tensorflow as tf
+print("TF:", tf.__version__)
+print("GPU:", tf.config.list_physical_devices('GPU'))
+import numpy as np
+import pandas as pd
+from sklearn.datasets import fetch_20newsgroups
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+import matplotlib.pyplot as plt
+import seaborn as sns
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Embedding, Conv1D, GlobalMaxPooling1D, Dense, Dropout
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.callbacks import EarlyStopping
+categories = ['alt.atheism', 'comp.graphics', 'sci.med', 'soc.religion.christian']
+newsgroups = fetch_20newsgroups(subset='all', categories=categories, remove=('headers', 'footers', 'quotes'))
+texts = newsgroups.data
+labels = newsgroups.target
+target_names = newsgroups.target_names
+print(f"Dataset loaded: {len(texts)} documents, {len(set(labels))} categories")
+print(f"Categories: {target_names}")
+X_train, X_test, y_train, y_test = train_test_split(
+    texts, labels, test_size=0.2, random_state=42, stratify=labels
+)
+print(f"\nTraining set: {len(X_train)} documents")
+print(f"Test set: {len(X_test)} documents")
+
+## BAG OF WORDS
+vectorizer_bow = CountVectorizer(max_features=5000, stop_words='english', lowercase=True)
+X_train_bow = vectorizer_bow.fit_transform(X_train)
+X_test_bow = vectorizer_bow.transform(X_test)
+print(f"BoW feature matrix shape: {X_train_bow.shape}")
+clf_bow = LogisticRegression(max_iter=1000, random_state=42)
+clf_bow.fit(X_train_bow, y_train)
+y_pred_bow = clf_bow.predict(X_test_bow)
+acc_bow = accuracy_score(y_test, y_pred_bow)
+print(f"Bag of Words Accuracy: {acc_bow:.4f}")
+print("\nClassification Report (BoW):")
+print(classification_report(y_test, y_pred_bow, target_names=target_names))
+cm = confusion_matrix(y_test, y_pred_bow)
+plt.figure(figsize=(8, 6))
+sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=target_names, yticklabels=target_names)
+plt.title("Confusion Matrix (BoW)")
+plt.xlabel("Predicted")
+plt.ylabel("True")
+plt.show()
+
+## N-GRAM
+vectorizer_ngram = CountVectorizer(
+    ngram_range=(2, 3), max_features=5000, stop_words='english', lowercase=True
+)
+X_train_ngram = vectorizer_ngram.fit_transform(X_train)
+X_test_ngram = vectorizer_ngram.transform(X_test)
+
+print(f"N-gram feature matrix shape: {X_train_ngram.shape}")
+clf_ngram = LogisticRegression(max_iter=1000, random_state=42)
+clf_ngram.fit(X_train_ngram, y_train)
+y_pred_ngram = clf_ngram.predict(X_test_ngram)
+acc_ngram = accuracy_score(y_test, y_pred_ngram)
+print(f"N-gram Features Accuracy: {acc_ngram:.4f}")
+print("\nClassification Report (N-gram):")
+print(classification_report(y_test, y_pred_ngram, target_names=target_names))
+cm = confusion_matrix(y_test, y_pred_ngram)
+plt.figure(figsize=(8, 6))
+sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=target_names, yticklabels=target_names)
+plt.title("Confusion Matrix (N-gram)")
+plt.xlabel("Predicted")
+plt.ylabel("True")
+plt.show()
+
+## CNN
+max_words = 10000
+max_len = 100
+embedding_dim = 100
+tokenizer = Tokenizer(num_words=max_words, oov_token='<OOV>')
+tokenizer.fit_on_texts(X_train)
+X_train_seq = tokenizer.texts_to_sequences(X_train)
+X_test_seq = tokenizer.texts_to_sequences(X_test)
+X_train_pad = pad_sequences(X_train_seq, maxlen=max_len, padding='post', truncating='post')
+X_test_pad = pad_sequences(X_test_seq, maxlen=max_len, padding='post', truncating='post')
+print(f"CNN input shape: {X_train_pad.shape}")
+print(f"Vocabulary size: {len(tokenizer.word_index)}")
+model = Sequential([
+        # Embedding layer
+        Embedding(input_dim=max_words, output_dim=embedding_dim, input_length=max_len),
+        
+        # Convolutional layer
+        Conv1D(filters=128, kernel_size=5, activation='relu'),
+        
+        # Global max pooling
+        GlobalMaxPooling1D(),
+        
+        # Dense layers
+        Dense(64, activation='relu'),
+        Dropout(0.5),
+        Dense(len(set(labels)), activation='softmax')
+    ])
+model.compile(
+        optimizer='adam',
+        loss='sparse_categorical_crossentropy',
+        metrics=['accuracy']
+    )
+early_stopping = EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)
+
+history = model.fit(
+    X_train_pad, y_train,
+    epochs=10,
+    batch_size=64,
+    validation_split=0.2,
+    callbacks=[early_stopping],
+    verbose=1
+)
+loss_cnn, acc_cnn = model.evaluate(X_test_pad, y_test, verbose=0)
+y_pred_cnn = model.predict(X_test_pad)
+y_pred_cnn_classes = np.argmax(y_pred_cnn, axis=1)
+print(f"CNN Accuracy: {acc_cnn:.4f}")
+print("\nClassification Report (CNN):")
+print(classification_report(y_test, y_pred_cnn_classes, target_names=target_names))
+cm = confusion_matrix(y_test, y_pred_cnn_classes)
+plt.figure(figsize=(8, 6))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=target_names, yticklabels=target_names)
+plt.title('Confusion Matrix (CNN)')
+plt.ylabel('True Label')
+plt.xlabel('Predicted Label')
+plt.show()
+
+results_df = pd.DataFrame({
+    'Method': ['Bag of Words', 'N-gram (2,3)', 'CNN with Embeddings'],
+    'Accuracy': [acc_bow, acc_ngram, acc_cnn]
+})
+print(results_df.to_string(index=False))
+
+plt.figure(figsize=(10, 6))
+methods = results_df['Method']
+accuracies = results_df['Accuracy']
+
+bars = plt.bar(methods, accuracies, color=['skyblue', 'lightgreen', 'coral'])
+plt.xlabel('Classification Method')
+plt.ylabel('Accuracy')
+plt.title('Text Classification Methods Comparison')
+plt.ylim(0, 1)
+
+for bar, acc in zip(bars, accuracies):
+    height = bar.get_height()
+    plt.text(bar.get_x() + bar.get_width()/2., height + 0.01,
+             f'{acc:.3f}', ha='center', va='bottom')
+
+plt.tight_layout()
+plt.show()
+
+## LAB 8 CNN VS RNN TEXT CLASSIFICATION, RNN VS N-GRAM LANGUAGE MODELLING
+
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.datasets import imdb
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Embedding, LSTM, Conv1D, GlobalMaxPooling1D
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+## 1. CNN VS RNN TEXT CLASSIFICATION
+max_features = 10000 
+maxlen = 500        
+batch_size = 16
+(x_train, y_train), (x_test, y_test) = imdb.load_data(num_words=max_features)
+print(f"{len(x_train)} training sequences, {len(x_test)} test sequences.")
+
+print(f"Padding sequences to length {maxlen}...")
+x_train = pad_sequences(x_train, maxlen=maxlen)
+x_test = pad_sequences(x_test, maxlen=maxlen)
+print(f"x_train shape: {x_train.shape}")
+print(f"x_test shape: {x_test.shape}")
+cnn_model = Sequential([
+    Embedding(max_features, 128, input_length=maxlen),
+    Conv1D(filters=32, kernel_size=7, activation='relu'),
+    GlobalMaxPooling1D(),
+    Dense(1, activation='sigmoid')
+])
+
+cnn_model.summary()
+cnn_model.compile(optimizer='adam',loss='binary_crossentropy',metrics=['accuracy'])
+cnn_history = cnn_model.fit(x_train, y_train,epochs=3,batch_size=batch_size,validation_split=0.2)
+rnn_model = Sequential([
+    Embedding(max_features, 128, input_length=maxlen),
+    LSTM(64),
+    Dense(1, activation='sigmoid')
+])
+
+rnn_model.summary()
+rnn_model.compile(optimizer='adam',loss='binary_crossentropy',metrics=['accuracy'])
+rnn_history = rnn_model.fit(x_train, y_train,epochs=3,batch_size=batch_size,validation_split=0.2)
+cnn_loss, cnn_accuracy = cnn_model.evaluate(x_test, y_test, verbose=0)
+print(f"CNN Model - Test Loss: {cnn_loss:.4f}, Test Accuracy: {cnn_accuracy:.4f}")
+
+rnn_loss, rnn_accuracy = rnn_model.evaluate(x_test, y_test, verbose=0)
+print(f"RNN Model - Test Loss: {rnn_loss:.4f}, Test Accuracy: {rnn_accuracy:.4f}")
+#confusion matrix for cnn model
+cnn_pred = cnn_model.predict(x_test)
+cnn_pred = (cnn_pred > 0.5).astype(int)
+cnn_cm = confusion_matrix(y_test, cnn_pred)
+print("Confusion Matrix for CNN Model:")
+print(cnn_cm)
+
+#confusion matrix for rnn model
+rnn_pred = rnn_model.predict(x_test)
+rnn_pred = (rnn_pred > 0.5).astype(int)
+rnn_cm = confusion_matrix(y_test, rnn_pred)
+print("Confusion Matrix for RNN Model:")
+print(rnn_cm)
+
+#heat maps for CNN and RNN models side by side
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+
+sns.heatmap(cnn_cm, annot=True, fmt="d", cmap="Blues", cbar=False, ax=ax1)
+ax1.set_title("Confusion Matrix for CNN Model")
+ax1.set_xlabel("Predicted")
+ax1.set_ylabel("True")
+
+sns.heatmap(rnn_cm, annot=True, fmt="d", cmap="Blues", cbar=False, ax=ax2)
+ax2.set_title("Confusion Matrix for RNN Model") 
+ax2.set_xlabel("Predicted")
+ax2.set_ylabel("True")
+
+plt.tight_layout()
+plt.show()
+
+# RNN VS NGRAM LANGUAGE MODELLING
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import math
+import nltk
+from nltk.util import ngrams
+from collections import Counter
+corpus = """Alice was beginning to get very tired of sitting by her sister on the bank, and of having nothing to do: once or twice she had peeped into the book her sister was reading, but it had no pictures or conversations in it, "and what is the use of a book," thought Alice, "without pictures or conversations?"
+So she was considering in her own mind (as well as she could, for the hot day made her feel very sleepy and stupid) whether the pleasure of making a daisy-chain would be worth the trouble of getting up and picking the daisies, when suddenly a White Rabbit with pink eyes ran close by her.
+There was nothing so very remarkable in that; nor did Alice think it so very much out of the way to hear the Rabbit say to itself, "Oh dear! Oh dear! I shall be late!" (when she thought it over afterwards, it occurred to her that she ought to have wondered at this, but at the time it all seemed quite natural); but when the Rabbit actually took a watch out of its waistcoat-pocket, and looked at it, and then hurried on, Alice started to her feet, for it flashed across her mind that she had never before seen a rabbit with either a waistcoat-pocket, or a watch to take out of it, and burning with curiosity, she ran across the field after it, and was just in time to see it pop down a large rabbit-hole under the hedge.
+In another moment down went Alice after it, never once considering how in the world she was to get out again.
+The rabbit-hole went straight on like a tunnel for some way, and then dipped suddenly down, so suddenly that Alice had not a moment to think about stopping herself before she found herself falling down what seemed to be a very deep well.
+"""
+
+tokens = nltk.word_tokenize(corpus.lower())
+vocab = list(set(tokens))
+word2idx = {w: i for i, w in enumerate(vocab)}
+idx2word = {i: w for w, i in word2idx.items()}
+
+def make_data(tokens, seq_len=3):
+    data = []
+    for i in range(len(tokens) - seq_len):
+        seq = tokens[i:i+seq_len]
+        target = tokens[i+seq_len]
+        data.append(([word2idx[w] for w in seq], word2idx[target]))
+    return data
+
+seq_len = 3
+data = make_data(tokens, seq_len)
+class RNNLM(nn.Module):
+    def __init__(self, vocab_size, embed_size, hidden_size):
+        super(RNNLM, self).__init__()
+        self.embed = nn.Embedding(vocab_size, embed_size)
+        self.rnn = nn.RNN(embed_size, hidden_size, batch_first=True)
+        self.fc = nn.Linear(hidden_size, vocab_size)
+
+    def forward(self, x):
+        x = self.embed(x)
+        out, _ = self.rnn(x)
+        out = self.fc(out[:, -1, :])  # last timestep
+        return out
+
+
+vocab_size = len(vocab)
+embed_size = 16
+hidden_size = 32
+model = RNNLM(vocab_size, embed_size, hidden_size)
+
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.Adam(model.parameters(), lr=0.01)
+epochs = 100
+for epoch in range(epochs):
+    total_loss = 0
+    for seq, target in data:
+        seq = torch.tensor([seq])
+        target = torch.tensor([target])
+        optimizer.zero_grad()
+        output = model(seq)
+        loss = criterion(output, target)
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.item()
+    if (epoch+1) % 20 == 0:
+        print(f"Epoch [{epoch+1}/{epochs}], Loss: {total_loss:.4f}")
+def evaluate_rnn(model, data):
+    model.eval()
+    total_loss, correct = 0, 0
+    with torch.no_grad():
+        for seq, target in data:
+            seq = torch.tensor([seq])
+            target = torch.tensor([target])
+            output = model(seq)
+            loss = criterion(output, target)
+            total_loss += loss.item()
+            predicted = torch.argmax(output, dim=1)
+            correct += (predicted == target).sum().item()
+    avg_loss = total_loss / len(data)
+    perplexity = math.exp(avg_loss)
+    accuracy = correct / len(data) * 100
+    return perplexity, accuracy
+
+rnn_perplexity, rnn_accuracy = evaluate_rnn(model, data)
+print(f"RNN Perplexity: {rnn_perplexity:.4f}")
+print(f"RNN Accuracy: {rnn_accuracy:.2f}%")
+bigrams = list(ngrams(tokens, 2))
+bigram_counts = Counter(bigrams)
+unigram_counts = Counter(tokens)
+
+def bigram_prob(w1, w2):
+    return (bigram_counts[(w1, w2)] + 1) / (unigram_counts[w1] + len(vocab))  # add-1 smoothing
+
+def evaluate_bigram(tokens):
+    log_prob, correct, N = 0, 0, len(tokens) - 1
+    for i in range(N):
+        probs = {w: bigram_prob(tokens[i], w) for w in vocab}
+        predicted_word = max(probs, key=probs.get)
+        if predicted_word == tokens[i+1]:
+            correct += 1
+        p = probs[tokens[i+1]]
+        log_prob += math.log(p)
+    perplexity = math.exp(-log_prob / N)
+    accuracy = correct / N * 100
+    return perplexity, accuracy
+ngram_perplexity, ngram_accuracy = evaluate_bigram(tokens)
+print(f"Bigram Perplexity: {ngram_perplexity:.4f}")
+
+# LAB 9 ENCODER DECODER
+
+import os
+import numpy as np
+import pandas as pd
+import tensorflow as tf
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input, LSTM, Embedding, Dense, Concatenate, Dot, Activation
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+datapath = "/kaggle/input/en-fr-translation-dataset/en-fr.csv"
+data = pd.read_csv(datapath)
+data.shape
+start = 5000000
+end = 5005000
+data_sample = data.iloc[start:end].copy()
+input_texts = data_sample["en"].astype(str).str.lower().tolist()
+target_texts = data_sample["fr"].astype(str).str.lower().tolist()
+
+target_texts = ["<start> " + t + " <end>" for t in target_texts]
+
+print("Samples loaded:", len(input_texts))
+print("English sample:", input_texts[0])
+print("French sample:", target_texts[0])
+num_words = 10000
+max_len_input = 25
+max_len_target = 25
+
+tokenizer_en = Tokenizer(num_words=num_words, filters="")
+tokenizer_en.fit_on_texts(input_texts)
+encoder_input_data = tokenizer_en.texts_to_sequences(input_texts)
+encoder_input_data = pad_sequences(encoder_input_data, maxlen=max_len_input, padding="post")
+
+tokenizer_fr = Tokenizer(num_words=num_words, filters="")
+tokenizer_fr.fit_on_texts(target_texts)
+decoder_input_data = tokenizer_fr.texts_to_sequences(target_texts)
+decoder_input_data = pad_sequences(decoder_input_data, maxlen=max_len_target, padding="post")
+
+decoder_target_data = np.zeros_like(decoder_input_data)
+decoder_target_data[:, :-1] = decoder_input_data[:, 1:]
+
+print("Encoder shape:", encoder_input_data.shape)
+print("Decoder shape:", decoder_input_data.shape)
+vocab_in = min(num_words, len(tokenizer_en.word_index) + 1)
+vocab_out = min(num_words, len(tokenizer_fr.word_index) + 1)
+latent_dim = 128
+
+# Encoder
+encoder_inputs = Input(shape=(None,))
+enc_emb = Embedding(vocab_in, latent_dim)(encoder_inputs)
+encoder_outputs, state_h, state_c = LSTM(latent_dim, return_sequences=True, return_state=True)(enc_emb)
+
+# Decoder
+decoder_inputs = Input(shape=(None,))
+dec_emb = Embedding(vocab_out, latent_dim)(decoder_inputs)
+decoder_lstm = LSTM(latent_dim, return_sequences=True, return_state=True)
+decoder_outputs, _, _ = decoder_lstm(dec_emb, initial_state=[state_h, state_c])
+
+# Attention
+attention = Dot(axes=[2, 2])([decoder_outputs, encoder_outputs])
+attention = Activation('softmax')(attention)
+context = Dot(axes=[2, 1])([attention, encoder_outputs])
+decoder_combined_context = Concatenate(axis=-1)([context, decoder_outputs])
+
+# Final dense layer
+decoder_dense = Dense(vocab_out, activation="softmax")
+decoder_outputs = decoder_dense(decoder_combined_context)
+model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
+model.compile(optimizer="rmsprop", loss="sparse_categorical_crossentropy", metrics=["accuracy"])
+model.summary()
+history = model.fit(
+    [encoder_input_data, decoder_input_data],
+    np.expand_dims(decoder_target_data, -1),
+    batch_size=32,
+    epochs=50,
+    validation_split=0.1
+)
+print("Final Training Accuracy:", history.history['accuracy'][-1])
+print("Final Validation Accuracy:", history.history['val_accuracy'][-1])
+
+
+# Lab 10 - ENCODER DECODER FOR MACHINE TRANSLATION
+
+import numpy as np
+import pandas as pd
+import os
+from datasets import load_dataset
+from transformers import AutoTokenizer, AutoModelForTokenClassification, TrainingArguments, Trainer, DataCollatorForTokenClassification, pipeline
+import evaluate
+dataset = load_dataset('conll2003')
+
+print(dataset['train'].features)
+print(dataset['train'][0])
+
+label_names = dataset['train'].features['ner_tags'].feature.names
+print("NER Label Names:", label_names)
+
+checkpoint = 'distilbert-base-cased'
+tokenizer = AutoTokenizer.from_pretrained(checkpoint)
+
+example = dataset['train'][0]
+tokenized_example = tokenizer(example['tokens'], is_split_into_words=True)
+print(tokenized_example.tokens())
+print(tokenized_example.word_ids())
+
+def align_target(labels, word_ids):
+    aligned_labels = []
+    last_word = None
+    
+    for word_id in word_ids:
+        if word_id is None:
+            aligned_labels.append(-100)
+        elif word_id != last_word:
+            aligned_labels.append(labels[word_id])
+        else:
+
+            label = labels[word_id]
+            if label % 2 == 1: 
+                label += 1    
+            aligned_labels.append(label)
+        last_word = word_id
+    
+    return aligned_labels
+
+words = ['[CLS]', 'Ger', '##man', 'call', 'to', 'Micro', '##so', '##ft', '[SEP]']
+word_ids = [None, 0, 0, 1, 2, 3, 3, 3, None]
+labels = [7, 0, 0, 3, 4]
+aligned_target = align_target(labels, word_ids)
+aligned_labels = [label_names[t] if t >= 0 else None for t in aligned_target]
+
+for x, y in zip(words, aligned_labels):
+    print(f"{x}\t{y}")
+
+
+def tokenize_and_align_labels(examples):
+    tokenized_inputs = tokenizer(examples['tokens'], truncation=True, is_split_into_words=True)
+    
+    labels_list = []
+    for i, labels in enumerate(examples['ner_tags']):
+        word_ids = tokenized_inputs.word_ids(batch_index=i)
+        labels_list.append(align_target(labels, word_ids))
+        
+    tokenized_inputs['labels'] = labels_list
+    return tokenized_inputs
+
+tokenized_dataset = dataset.map(tokenize_and_align_labels, batched=True, remove_columns=dataset['train'].column_names)
+print(tokenized_dataset)
+
+id2label = {i: label for i, label in enumerate(label_names)}
+label2id = {label: i for i, label in enumerate(label_names)}
+print(id2label, '\n', label2id)
+
+model = AutoModelForTokenClassification.from_pretrained(
+    checkpoint,
+    id2label=id2label,
+    label2id=label2id
+)
+
+data_collator = DataCollatorForTokenClassification(tokenizer=tokenizer)
+
+metric = evaluate.load("seqeval")
+
+def compute_metrics(eval_preds):
+    predictions, labels = eval_preds
+    predictions = np.argmax(predictions, axis=2)
+    
+    true_labels = [[label_names[l] for l in label if l != -100] for label in labels]
+    true_predictions = [[label_names[p] for p, l in zip(prediction, label) if l != -100] for prediction, label in zip(predictions, labels)]
+    
+    results = metric.compute(predictions=true_predictions, references=true_labels)
+    
+    return {
+        "precision": results["overall_precision"],
+        "recall": results["overall_recall"],
+        "f1": results["overall_f1"],
+        "accuracy": results["overall_accuracy"],
+    }
+
+from transformers import TrainingArguments
+
+training_args = TrainingArguments(
+    output_dir="./fine_tuned_ner_model",
+    eval_steps=500,  
+    per_device_train_batch_size=16,
+    per_device_eval_batch_size=16,
+    num_train_epochs=3,
+    weight_decay=0.01,
+    report_to="none"
+)
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=tokenized_dataset["train"],
+    eval_dataset=tokenized_dataset["validation"],
+    tokenizer=tokenizer,
+    data_collator=data_collator,
+    compute_metrics=compute_metrics,
+)
+
+print("\nStarting model fine-tuning...")
+trainer.train()
+print("Fine-tuning complete!")
+
+trainer.save_model("fine_tuned_ner_model")
+
+## Creating a NER Pipeline
+
+ner_pipeline = pipeline(
+    "token-classification",
+    model="fine_tuned_ner_model",
+    tokenizer=tokenizer,
+    aggregation_strategy="simple"
+)
+
+text_to_analyze = [
+    "Apple Inc. is planning to open a new store in San Francisco, California.",
+    "Barack Obama met with Angela Merkel in Berlin.",
+    "The United Nations headquarters is in New York City."
+]
+
+print("\n--- Named Entity Recognition Results ---")
+for text in text_to_analyze:
+    print("-" * 50)
+    print(f"Original Text: {text}")
+    ner_results = ner_pipeline(text)
+    print("Entities Found:")
+    for entity in ner_results:
+        print(f"  - Entity: {entity['word']}, Type: {entity['entity_group']}, Score: {entity['score']:.4f}")
+
+# LAB 11 - AUDIO CLASSIFICATION
+
+import os, shutil, random, joblib, math
+import pandas as pd
+import numpy as np
+from tqdm import tqdm
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score, classification_report
+import librosa
+import soundfile as sf
+from xgboost import XGBClassifier
+from sklearn.preprocessing import LabelEncoder
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix
+DATA_DIR    = "gtzan-dataset-music-genre-classification"
+SPLIT_DIR   = f"{DATA_DIR}/split" 
+CSV_DIR     = f"{DATA_DIR}/csv"    
+MODEL_DIR   = "gtzan_model"
+
+np.random.seed(42)
+random.seed(42)
+src = f"{DATA_DIR}/genres_original"
+genres = sorted(g for g in os.listdir(src) if os.path.isdir(os.path.join(src, g)))
+print("Genres found:", genres)
+Genres found: ['blues', 'classical', 'country', 'disco', 'hiphop', 'jazz', 'metal', 'pop', 'reggae', 'rock']
+for split in ["train", "val", "test"]:
+        for g in genres:
+            os.makedirs(f"{SPLIT_DIR}/{split}/{g}", exist_ok=True)
+for g in genres:
+        files = [f for f in os.listdir(f"{src}/{g}") if f.endswith(".wav")]
+        files.sort()
+        random.shuffle(files)
+        n = len(files)
+        splits = {
+            "train": files[:int(0.8*n)],
+            "val"  : files[int(0.8*n):int(0.9*n)],
+            "test" : files[int(0.9*n):]
+        }
+        for split, lst in splits.items():
+            for f in lst:
+                shutil.copy(f"{src}/{g}/{f}", f"{SPLIT_DIR}/{split}/{g}/{f}")
+print("Split done – copied to", SPLIT_DIR)
+Split done – copied to gtzan-dataset-music-genre-classification/split
+def pad_or_crop(y, target_len):
+    if len(y) < target_len:
+        y = np.pad(y, (0, target_len - len(y)))
+    else:
+        y = y[:target_len]
+    return y
+def extract_one(path):
+    y, sr = librosa.load(path, sr=None)
+    if sr != 22_050:
+        y = librosa.resample(y, orig_sr=sr, target_sr=22_050)
+    y = pad_or_crop(y, int(30 * 22_050))
+
+    mfcc = librosa.feature.mfcc(y=y, sr=22_050, n_mfcc=40)
+    delta = librosa.feature.delta(mfcc)
+    delta2 = librosa.feature.delta(mfcc, order=2)
+    chroma = librosa.feature.chroma_stft(y=y, sr=22_050)
+    contrast = librosa.feature.spectral_contrast(y=y, sr=22_050)
+    zcr = librosa.feature.zero_crossing_rate(y)
+    rms = librosa.feature.rms(y=y)
+
+    def agg(x):
+        return np.hstack([np.mean(x, axis=1), np.std(x, axis=1)])
+
+    vec = np.concatenate([
+        agg(mfcc), agg(delta), agg(delta2),
+        agg(chroma), agg(contrast), agg(zcr), agg(rms)
+    ])
+    return vec
+def build_csv(split_name):
+    root = f"{SPLIT_DIR}/{split_name}"
+    rows = []
+    genres = sorted(os.listdir(root))
+    for g in genres:
+        g_path = f"{root}/{g}"
+        for fname in tqdm(os.listdir(g_path), desc=f"{split_name}/{g}"):
+            fpath = f"{g_path}/{fname}"
+            try:
+                vec = extract_one(fpath)
+                rows.append([fname, g] + vec.tolist())
+            except Exception as e:
+                print("SKIP", fpath, e)
+    cols = ["filename", "label"] + [f"f{i}" for i in range(len(rows[0])-2)]
+    df = pd.DataFrame(rows, columns=cols)
+    os.makedirs(CSV_DIR, exist_ok=True)
+    out = f"{CSV_DIR}/{split_name}.csv"
+    df.to_csv(out, index=False)
+    print("Saved", out, df.shape)
+for split in ["train", "val", "test"]:
+        if not os.path.exists(f"{CSV_DIR}/{split}.csv"):
+            build_csv(split)
+train_df = pd.read_csv(f"{CSV_DIR}/train.csv")
+val_df   = pd.read_csv(f"{CSV_DIR}/val.csv")
+test_df  = pd.read_csv(f"{CSV_DIR}/test.csv")
+train_df.shape
+
+train_df.head(5)
+
+X_train = train_df.drop(["filename", "label"], axis=1).values.astype(np.float32)
+y_train = train_df["label"].values
+
+X_val   = val_df.drop(["filename", "label"], axis=1).values.astype(np.float32)
+y_val   = val_df["label"].values
+
+X_test  = test_df.drop(["filename", "label"], axis=1).values.astype(np.float32)
+y_test  = test_df["label"].values
+lbl_enc = LabelEncoder()
+y_train = lbl_enc.fit_transform(y_train)
+y_val   = lbl_enc.transform(y_val)
+y_test  = lbl_enc.transform(y_test)
+scaler = StandardScaler()
+
+X_train = scaler.fit_transform(X_train)
+X_val   = scaler.transform(X_val)
+X_test  = scaler.transform(X_test)
+clf = XGBClassifier(
+        n_estimators=600,
+        max_depth=6,
+        learning_rate=0.05,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        random_state=42,
+        eval_metric="mlogloss",
+        early_stopping_rounds=50,
+        n_jobs=-1
+    )
+clf.fit(
+        X_train, y_train,
+        eval_set=[(X_val, y_val)],
+        verbose=False
+    )
+
+preds = clf.predict(X_test)
+print("\nTest accuracy:", accuracy_score(y_test, preds))
+print(classification_report(y_test, preds, target_names=lbl_enc.classes_))
+
+cm = confusion_matrix(y_test, preds)
+plt.figure(figsize=(7, 5))
+sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
+            xticklabels=lbl_enc.classes_,
+            yticklabels=lbl_enc.classes_)
+plt.title("GTZAN – Confusion Matrix")
+plt.ylabel("True"); plt.xlabel("Predicted"); plt.tight_layout()
+plt.savefig(f"confusion_hm.png", dpi=300)
+
+# LAB12 - SPEECH EMOTION RECOGNITION
+
+import os, librosa, numpy as np, pandas as pd, matplotlib.pyplot as plt, seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.neural_network import MLPClassifier
+from sklearn.metrics import accuracy_score, classification_report
+import warnings, IPython.display as ipd
+warnings.filterwarnings("ignore")
+RAV = '/kaggle/input/ravdess-emotional-speech-audio/audio_speech_actors_01-24'
+files = sorted([os.path.join(root, f) for root, _, fs in os.walk(RAV) for f in fs if f.endswith('.wav')])
+emotions = ['neutral','calm','happy','sad','angry','fear','disgust','surprise']
+emo_files = {}
+for e in emotions:
+    for f in files:
+        parts = os.path.basename(f).replace('.wav','').split('-')
+        if int(parts[2])-1 == emotions.index(e):
+            emo_files[e] = f
+            break
+plt.figure(figsize=(16, 10))
+for i, (emo, path) in enumerate(emo_files.items(), 1):
+    plt.subplot(2, 4, i)
+    y, sr = librosa.load(path, duration=3)
+    plt.title(f'{emo} – wave'); librosa.display.waveshow(y, sr=sr)
+plt.tight_layout(); plt.show()
+
+plt.figure(figsize=(16, 5))
+for i, (emo, path) in enumerate(emo_files.items(), 1):
+    plt.subplot(2, 4, i)
+    y, sr = librosa.load(path, duration=3)
+    S = librosa.power_to_db(librosa.feature.melspectrogram(y=y, sr=sr))
+    librosa.display.specshow(S, y_axis='mel', x_axis='time')
+    plt.colorbar(format='%+2f dB'); plt.title(f'{emo} – mel-spec')
+plt.tight_layout(); plt.show()
+
+labels, gender = [], []
+for f in files:
+    part = f.split('/')[-1].split('-')
+    emotion = int(part[2])
+    actor   = int(part[6].split('.')[0])          # drop .wav
+    lab = f"{['male','female'][actor%2==0]}_{emotions[emotion-1]}"
+    labels.append(lab)
+label_enc = LabelEncoder()
+y = label_enc.fit_transform(labels)
+
+## Librosa
+!pip install -q gammatone
+from gammatone import gtgram
+
+def load(path):
+    y, sr = librosa.load(path, duration=3, offset=0.5)
+    return y, sr
+
+def mfcc_feat(path):
+    y, sr = load(path)
+    return np.mean(librosa.feature.mfcc(y=y, sr=sr, n_mfcc=40), axis=1)
+
+def lpcc_feat(path):
+    y, sr = load(path)
+    lpc = librosa.lpc(y, order=12)           
+    return np.real(np.fft.ifft(np.log(np.abs(np.fft.fft(lpc, n=40)))))
+
+def plp_feat(path):
+    y, sr = load(path)
+    S = librosa.power_to_db(librosa.feature.melspectrogram(y=y, sr=sr, n_mels=40))
+    return np.mean(librosa.feature.mfcc(S=S, n_mfcc=40), axis=1)   # 40 coeffs
+
+def gfcc_feat(path):
+    y, sr = load(path)
+    gt = gtgram.gtgram(y, sr, 0.010, 0.005, 40, 50)   # 40 bands
+    return np.mean(librosa.feature.mfcc(S=librosa.power_to_db(gt), n_mfcc=40), axis=1)
+feat_dict = {}
+for name, func in zip(['MFCC','PLP','LPCC','GFCC'],
+                      [mfcc_feat, plp_feat, lpcc_feat, gfcc_feat]):
+    print('Extracting', name)
+    feat_dict[name] = np.array([func(f) for f in files])
+
+
+X_base = feat_dict['MFCC']          # any feature matrix
+xtr_idx, xte_idx, ytr, yte = train_test_split(np.arange(len(X_base)), y,
+                                              test_size=.2, random_state=42,
+                                              stratify=y)
+results = {}
+for name, X in feat_dict.items():
+    scaler = StandardScaler()
+    X_train = scaler.fit_transform(X[xtr_idx])
+    X_test  = scaler.transform(X[xte_idx])
+    clf = MLPClassifier(hidden_layer_sizes=(100,), max_iter=300, random_state=42)
+    clf.fit(X_train, ytr)
+    acc = accuracy_score(yte, clf.predict(X_test))
+    results[name] = acc
+    print(f'{name}: {acc:.3f}')
+
+plt.bar(results.keys(), results.values(), color=['skyblue','orange','green','red'])
+plt.ylabel('Accuracy'); plt.title('Feature Comparison – RAVDESS 14-class')
+plt.ylim(0, 1); plt.show()
+
+best = max(results, key=results.get)
+print('\nBest feature:', best, results[best])
+X_best = feat_dict[best]
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_best[xtr_idx])  
+X_test  = scaler.transform(X_best[xte_idx])
+clf = MLPClassifier(hidden_layer_sizes=(100,), max_iter=300, random_state=42)
+clf.fit(X_train, ytr)
+pred = clf.predict(X_test)
+print(classification_report(yte, pred, target_names=label_enc.classes_))
+
+
+# LAB 13 - Isolated word speech recognition
+
+import os
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import librosa
+import librosa.display
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.svm import SVC
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+import IPython.display as ipd 
+data_dir = "/kaggle/input/google-speech-commands/"
+target_words = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
+audio_files = []
+labels = []
+check_dir = "/kaggle/input/google-speech-commands/"
+print(os.listdir(check_dir))
+
+print(f"Loading data from: {data_dir}")
+for word in target_words:
+    word_path = os.path.join(data_dir, word)
+    if os.path.exists(word_path):
+        for filename in os.listdir(word_path):
+            if filename.endswith('.wav'):
+                audio_files.append(os.path.join(word_path, filename))
+                labels.append(word)
+    else:
+        print(f"Warning: Directory for '{word}' not found at {word_path}")
+
+df = pd.DataFrame({'file_path': audio_files, 'label': labels})
+
+print(f"\nTotal audio files found: {len(df)}")
+print("\nFirst 5 rows of the DataFrame:")
+print(df.head())
+
+print("\nDistribution of labels:")
+print(df['label'].value_counts())
+
+print("\n--- Visualizing a few random audio samples ---")
+num_examples_to_plot = 3
+plt.figure(figsize=(15, 8))
+
+for i in range(num_examples_to_plot):
+    sample = df.sample(1).iloc[0]
+    file_path = sample['file_path']
+    label = sample['label']
+
+    print(f"\nDisplaying example: '{label}' from {file_path}")
+    y, sr = librosa.load(file_path, sr=None)
+
+    plt.subplot(num_examples_to_plot, 2, 2*i + 1)
+    librosa.display.waveshow(y, sr=sr)
+    plt.title(f'Waveform of "{label}" (SR: {sr} Hz)')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Amplitude')
+
+    plt.subplot(num_examples_to_plot, 2, 2*i + 2)
+    S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128)
+    S_dB = librosa.power_to_db(S, ref=np.max)
+    librosa.display.specshow(S_dB, sr=sr, x_axis='time', y_axis='mel')
+    plt.colorbar(format='%+2.0f dB')
+    plt.title(f'Mel-spectrogram of "{label}"')
+        
+plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+plt.suptitle("Example Audio Waveforms and Mel-spectrograms", fontsize=16)
+plt.show()
+
+from tqdm.auto import tqdm
+tqdm.pandas()
+
+def extract_features(file_path, n_mfcc=13, max_pad_len=40):
+    try:
+        y, sr = librosa.load(file_path, sr=16000)
+        mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=n_mfcc)
+            
+        if mfccs.shape[1] > max_pad_len:
+            mfccs = mfccs[:, :max_pad_len]
+        else:
+            pad_width = max_pad_len - mfccs.shape[1]
+            mfccs = np.pad(mfccs, pad_width=((0, 0), (0, pad_width)), mode='constant')
+        return mfccs
+    except Exception as e:
+        print(f"Error processing {file_path}: {e}")
+        return None
+
+print("\nExtracting MFCC features from all audio files...")
+df['features'] = df['file_path'].progress_apply(extract_features)
+
+print("Feature extraction complete.")
+
+df.dropna(subset=['features'], inplace=True)
+X = np.array([feature.flatten() for feature in df['features']])
+y = df['label'].values
+label_encoder = LabelEncoder()
+y_encoded = label_encoder.fit_transform(y)
+print(f"\nShape of feature matrix (X): {X.shape}")
+print(f"Shape of label vector (y): {y.shape}")
+
+X_train, X_test, y_train, y_test = train_test_split(X, y_encoded, test_size=0.2, random_state=42, stratify=y_encoded)
+print(f"\nTrain set size: {X_train.shape[0]} samples")
+print(f"Test set size: {X_test.shape[0]} samples")
+
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+print("\nTraining the Support Vector Classifier (SVC) model...")
+model = SVC(kernel='rbf', C=10, random_state=42)
+model.fit(X_train_scaled, y_train)
+print("Model training complete.")
+
+print("\nEvaluating the model on the test set...")
+y_pred = model.predict(X_test_scaled)
+
+accuracy = accuracy_score(y_test, y_pred)
+print(f"\nOverall Accuracy: {accuracy:.4f}")
+
+print("\nDetailed Classification Report:")
+print(classification_report(y_test, y_pred, target_names=label_encoder.classes_))
+
+conf_mat = confusion_matrix(y_test, y_pred)
+plt.figure(figsize=(10, 8))
+sns.heatmap(conf_mat, annot=True, fmt='d', cmap='Blues',
+            xticklabels=label_encoder.classes_,
+            yticklabels=label_encoder.classes_)
+plt.title('Confusion Matrix')
+plt.xlabel('Predicted Label')
+plt.ylabel('True Label')
+plt.show()
+
+# Lab-14 Speaker Recognition
+
+import os, glob, warnings
+import numpy as np
+import librosa
+from sklearn.mixture import GaussianMixture
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+import matplotlib.pyplot as plt
+
+data_path = "/kaggle/input/speaker-recognition-dataset/16000_pcm_speeches"
+speakers = [s for s in os.listdir(data_path)
+            if os.path.isdir(os.path.join(data_path, s))
+            and not s.startswith("_")
+            and s not in ["other", "tf_Wav_reader.py"]]
+
+print(f"Found {len(speakers)} speaker folders: {speakers}")
+
+valid_speakers = []
+for s in speakers:
+    n_wavs = len(glob.glob(os.path.join(data_path, s, "*.wav")))
+    if n_wavs >= 2:
+        valid_speakers.append(s)
+print(f"Keeping {len(valid_speakers)} speakers with ≥2 files: {valid_speakers}")
+
+X_mfcc, X_ivec, y = [], [], []
+for speaker in valid_speakers:
+    speaker_dir = os.path.join(data_path, speaker)
+    for wav_path in glob.glob(os.path.join(speaker_dir, "*.wav")):
+        try:
+            y_audio, sr = librosa.load(wav_path, sr=None)
+
+            # Skip too short or silent clips
+            if len(y_audio) < 0.5 * sr:
+                continue
+            if np.mean(np.abs(y_audio)) < 0.001:
+                continue
+
+            # MFCC features
+            mfcc_feat_matrix = librosa.feature.mfcc(y=y_audio, sr=sr, n_mfcc=20)
+            mfcc_mean = np.mean(mfcc_feat_matrix, axis=1)
+            mfcc_std = np.std(mfcc_feat_matrix, axis=1)
+            mfcc_feat = np.hstack([mfcc_mean, mfcc_std])
+            X_mfcc.append(mfcc_feat)
+
+            # i-vector (GMM supervector)
+            if mfcc_feat_matrix.shape[1] < 25:
+                continue
+            gmm = GaussianMixture(
+                n_components=2,
+                covariance_type='diag',
+                random_state=0,
+                reg_covar=1e-2
+            )
+            gmm.fit(mfcc_feat_matrix.T)
+            ivec = np.hstack([gmm.means_.flatten(), gmm.covariances_.flatten()])
+            X_ivec.append(ivec)
+            y.append(speaker)
+        except Exception as e:
+            print(f"Skipped {wav_path}: {e}")
+
+print(f"Extracted features for {len(y)} files and {len(set(y))} speakers")
+
+sc_m = StandardScaler()
+sc_i = StandardScaler()
+X_mfcc_s = sc_m.fit_transform(X_mfcc)
+X_ivec_s = sc_i.fit_transform(X_ivec)
+if len(set(y)) < 2:
+    raise ValueError("❌ Not enough speakers with usable files to train a classifier.")
+
+X_train_m, X_test_m, y_train, y_test = train_test_split(
+    X_mfcc_s, y, test_size=0.3, random_state=42, stratify=y
+)
+X_train_i, X_test_i, _, _ = train_test_split(
+    X_ivec_s, y, test_size=0.3, random_state=42, stratify=y
+)
+
+print("Unique speakers in training set:", set(y_train))
+print("Unique speakers in testing set:", set(y_test))
+
+clf_m = SVC(kernel='linear', random_state=42)
+clf_i = SVC(kernel='linear', random_state=42)
+clf_m.fit(X_train_m, y_train)
+clf_i.fit(X_train_i, y_train)
+
+acc_m = accuracy_score(y_test, clf_m.predict(X_test_m))
+acc_i = accuracy_score(y_test, clf_i.predict(X_test_i))
+
+print(f"🔹 MFCC-based accuracy: {acc_m:.3f}")
+print(f"🔹 i-vector-based accuracy: {acc_i:.3f}")
+
+plt.bar(["MFCC", "i-vector"], [acc_m, acc_i])
+plt.ylabel("Accuracy")
+plt.title("Speaker Recognition Comparison")
+plt.show()
+
+
