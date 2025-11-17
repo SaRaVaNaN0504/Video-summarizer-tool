@@ -3,6 +3,23 @@ import sys
 import tempfile
 from moviepy.editor import VideoFileClip
 
+# Add this compatibility fix at the top
+import os
+import sys
+
+# Workaround for moviepy audio issues on Render
+os.environ["IMAGEIO_FFMPEG_EXE"] = "/usr/bin/ffmpeg"
+
+try:
+    from moviepy.editor import VideoFileClip
+except ImportError as e:
+    print(f"MoviePy import error: {e}")
+    
+try:
+    from pydub import AudioSegment
+except ImportError as e:
+    print(f"Pydub import error: {e}")
+    
 # -------------------------------------------------------------------
 # Compatibility patch for Python 3.13 (audioop removed from stdlib)
 # -------------------------------------------------------------------
